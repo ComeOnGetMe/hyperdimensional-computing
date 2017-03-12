@@ -1,2 +1,2 @@
-# speech-recognition-with-hyperdimensional-computing
+# Hyperdimensional Computing
 Hyperdimensional Computing on Speech Recognitions
