@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def load_uci(file_path, block_per_class, sample_per_class):
+def load_arabic(file_path, block_per_class, sample_per_class):
     raw = []
     num_block = 0
     with open(file_path, 'r') as f:
