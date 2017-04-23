@@ -39,5 +39,5 @@ def load_isolet(file_path):
 
 
 if __name__ == '__main__':
-    x, y = load_isolet('data/ISOLET/isolet5.data')
+    x, y = load_isolet('data/ISOLET/isolet1+2+3+4.data')
     print x.shape, y.shape, x.dtype, y.dtype

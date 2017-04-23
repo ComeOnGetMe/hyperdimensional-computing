@@ -4,18 +4,23 @@ from scipy.stats import mode
 
 
 class HDClassifier:
-    def __init__(self, d, verbose=False, num_class_hv=1):
+    def __init__(self, d, verbose=False, num_class_hv=1, num_level=10,
+                 level_type='random', evaluation='nn'):
         """
         :param d: dimension of HD vector
         """
         assert d % 2 == 0, "[Error] dimension is odd"
-        self.class_hv = None
         self.channel_im = {}
         self.level_im = {}
         self.d = d
         self.verbose = verbose
         self.num_class_hv = num_class_hv
         self.num_label = 0
+        self.level_type = level_type
+        self.num_level = num_level
+        self.evaluation = evaluation
+        self.hv_label = None
+        self.hv = None
 
     def compute_sample_hv(self, sample):
         """
@@ -36,18 +41,25 @@ class HDClassifier:
 
     def generate_level_im(self, l):
         self.level_im = np.ones((l, self.d))
-        for i in xrange(l):
-            randidx = np.random.permutation(self.d)
-            self.level_im[i, randidx[:self.d / 2]] = -1
+        if self.level_type == 'random':
+            for i in xrange(l):
+                randidx = np.random.permutation(self.d)
+                self.level_im[i, randidx[:self.d / 2]] = -1
 
-    def fit(self, X, y, num_level):
+        elif self.level_type == 'rotation':
+            randidx = np.random.permutation(self.d)
+            for i in xrange(l):
+                self.level_im[i, randidx[:self.d / 2]] = -1
+                randidx = np.roll(randidx, self.d / 2 / l)
+
+    def fit(self, X, y):
         num_channel = X.shape[1]
         self.generate_channel_im(num_channel)
-        self.generate_level_im(num_level)
+        self.generate_level_im(self.num_level)
 
         labels = np.unique(y)
         self.num_label = labels.size
-        disc_degree = np.unique(X[:, 0]).shape[0]
+        disc_degree = np.unique(X[:, 0]).size
 
         # Warnings
         if self.d < 2 * X.shape[0] / self.num_label and self.verbose:
@@ -56,19 +68,28 @@ class HDClassifier:
             print '[Warning] small dimension for this data, HVs might not be orthogonal'
 
         # Training
-        self.class_hv = np.zeros((self.num_label * self.num_class_hv, self.d))  # HV for single class
-        for i, l in enumerate(labels):
-            samples = X[y == l]
-            for j, sample in enumerate(samples):
+        if self.evaluation == 'average':
+            self.hv = np.zeros((self.num_label * self.num_class_hv, self.d))  # HV for single class
+            for i, l in enumerate(labels):
+                samples = X[y == l]
+                for j, sample in enumerate(samples):
+                    sample_hv = self.compute_sample_hv(sample)
+                    self.hv[i*self.num_class_hv + j % self.num_class_hv] += sample_hv
+
+        elif self.evaluation == 'nn':
+            self.hv = np.zeros((X.shape[0], self.d))
+            self.hv_label = y
+            for i, sample in enumerate(X):
                 sample_hv = self.compute_sample_hv(sample)
-                self.class_hv[i*self.num_class_hv + j % self.num_class_hv] += sample_hv  # tunable
+                self.hv[i] = sample_hv
+
         return self
 
     def predict(self, X):
         X_hv = np.zeros((X.shape[0], self.d))
         for i in xrange(X.shape[0]):
             X_hv[i] = self.compute_sample_hv(X[i])
-        dists = cdist(X_hv, self.class_hv, 'cosine')
+        dists = cdist(X_hv, self.hv, 'cosine')
         rank = dists.argsort(axis=1)[:, :self.num_class_hv]
         rank %= self.num_label
         top, _ = mode(rank, axis=1)
@@ -82,10 +103,10 @@ def test():
 if __name__ == '__main__':
     d = 10000
     num_sample = 100
-    num_level = 100
+    num_level = 10
     X = np.random.randint(0, num_level, (num_sample, 13))
     y = np.random.randint(0, 10, num_sample)
-    hdc = HDClassifier(d, num_class_hv=10).fit(X, y, 100)
+    hdc = HDClassifier(d, num_class_hv=1, level_type='rotation', evaluation='average').fit(X, y)
 
     preds = hdc.predict(X)
     print (preds == y).mean()
